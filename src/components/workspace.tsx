@@ -116,7 +116,21 @@ function Metric({
   onClick?: () => void;
 }) {
   return (
-    <button className={"metric " + tone} onClick={onClick} disabled={!onClick}>
+    <button
+      className={
+        "metric " +
+        tone +
+        (label.includes("Impostos")
+          ? " metric-tax"
+          : label.includes("Salários") || label.includes("salários")
+            ? " metric-payroll"
+            : label.includes("Distribuições")
+              ? " metric-distribution"
+              : "")
+      }
+      onClick={onClick}
+      disabled={!onClick}
+    >
       <div className="metric-label">
         {label}
         <span className="metric-icon">
@@ -711,7 +725,7 @@ export default function Workspace({
         <div
           className="chart"
           role="img"
-          aria-label="Entradas em verde, saídas em vermelho e saldo final em roxo, por mês"
+          aria-label="Entradas em verde, saídas em vermelho e saldo final em azul, por mês"
         >
           <div className="chart-axis">
             {[1, 0.75, 0.5, 0.25, 0].map((n) => (
@@ -793,6 +807,26 @@ export default function Workspace({
   function dashboard() {
     return (
       <>
+        <div className="quick-actions" aria-label="Ações rápidas">
+          <span>O que você quer fazer?</span>
+          <Button className="action-income" onClick={() => newEntry("receita")}>
+            <ArrowDownLeft size={18} />
+            Registrar entrada
+          </Button>
+          <Button
+            className="action-expense"
+            onClick={() => newEntry("despesa")}
+          >
+            <ArrowUpRight size={18} />
+            Registrar saída
+          </Button>
+          <Button className="action-transfer" asChild>
+            <Link href="/contas">
+              <ArrowLeftRight size={18} />
+              Transferir entre contas
+            </Link>
+          </Button>
+        </div>
         <div className="metrics">
           <Metric
             label="Saldo atual"
@@ -835,7 +869,7 @@ export default function Workspace({
             <div
               className="reserve-ring"
               style={{
-                background: `conic-gradient(#ad91df ${reserve.need ? Math.min(100, Math.round((reserve.reserve / reserve.need) * 100)) : 100}%, #f3eef9 0)`,
+                background: `conic-gradient(#00836b ${reserve.need ? Math.min(100, Math.round((reserve.reserve / reserve.need) * 100)) : 100}%, #e1ebf2 0)`,
               }}
             >
               <div>
