@@ -54,3 +54,7 @@ Reservas são pisos manuais. Caixa livre = saldo − reservas − max(0, comprom
 ## Etapa 2 · v0 / Supabase
 
 Leia [o modelo e o plano de integração](docs/ETAPA-2.md) e [a matriz de aceite](docs/ACEITE.md). Substitua o adaptador de arquivo por transações PostgreSQL mantendo regras e contratos das operações. Remova login e sessão de demonstração. Conecte o Supabase existente com autorização específica para o grupo, Auth com convites/recuperação e RLS por titular inclusive para administradores. Todas as tabelas novas propostas começam com `holding_`. Nenhuma migração foi executada nesta etapa.
+
+### Acesso por proxy
+
+O login compara a origem com o endereço público encaminhado em `X-Forwarded-Host` e `X-Forwarded-Proto`. O proxy deve sobrescrever esses cabeçalhos. Opcionalmente, configure `APP_ORIGIN` com a origem pública exata (ex.: `https://financeiro.exemplo.com`) para fixar o endereço autorizado. Cookies usam `Secure` quando esse endereço usa HTTPS.

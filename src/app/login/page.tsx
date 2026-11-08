@@ -13,7 +13,7 @@ export default function Login() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user }),
       });
-      if (!r.ok) throw Error("Não foi possível iniciar a sessão.");
+      if (!r.ok) throw Error(r.status === 403 ? "O endereço de acesso não foi reconhecido. Abra o endereço principal da aplicação e tente novamente." : `Não foi possível iniciar a sessão (erro ${r.status}). Tente novamente.`);
       window.location.href = "/";
     } catch (e) {
       setError((e as Error).message);

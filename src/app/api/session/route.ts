@@ -1,3 +1,4 @@
+import { publicOrigin } from "@/lib/request-origin";
 import { cookies } from "next/headers";
 import { currentUser, sameOrigin, token } from "@/lib/session";
 export async function GET() {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     sameSite: "strict",
     secure:
       process.env.NODE_ENV === "production" &&
-      new URL(request.url).protocol === "https:",
+      publicOrigin(request)?.startsWith("https://") === true,
     path: "/",
     maxAge: 86400,
   });
