@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowUpRight, ShieldCheck, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 export default function Login() {
+  const router = useRouter();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function login(user: string) {
@@ -14,7 +16,8 @@ export default function Login() {
         body: JSON.stringify({ user }),
       });
       if (!r.ok) throw Error(r.status === 403 ? "O endereço de acesso não foi reconhecido. Abra o endereço principal da aplicação e tente novamente." : `Não foi possível iniciar a sessão (erro ${r.status}). Tente novamente.`);
-      window.location.href = "/";
+      router.replace("/");
+      router.refresh();
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
