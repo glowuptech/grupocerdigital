@@ -62,3 +62,19 @@ O login compara a origem com o endereço público encaminhado em `X-Forwarded-Ho
 ### Lançamentos simplificados
 
 No cadastro diário, informe tipo, projeto, título, valor, categoria, vencimento e situação. “Já paguei / já recebi” registra o movimento e seu pagamento/recebimento na mesma transação; escolha a conta da empresa e a data real. Para recorrências, deixe pendente e confirme cada ocorrência individualmente. Competência, classificação DRE, vínculos e rateios ficam em “Mais opções”. Na lista, use Recebimentos (verde) e Despesas (vermelho), com “Marcar como recebido/pago” para confirmar valores inclusive parciais. A conferência de extrato é opcional na tela Contas.
+
+### Funcionários, prestadores e sócios
+
+A área **Funcionários e equipe** substitui o rótulo genérico Pessoas. Cadastre uma pessoa e abra **Abrir perfil**: `/pessoas/:id`. A ficha reúne CPF/RG, contato, nascimento, endereço e observações. O cadastro de pessoa não cria credenciais de acesso. Uma pessoa pode ter várias contratações CLT/PJ em empresas/projetos diferentes e também ser sócia; suas distribuições continuam separadas em Sócios.
+
+Em **Adicionar contratação**, registre cargo/função, empresa definida pelo projeto, início/término, salário ou honorários, dia do pagamento, jornada, benefícios e condições. Os documentos PDF/TXT fictícios ficam na própria contratação e podem ser removidos com confirmação. Reajustar/renovar cria uma nova condição sem sobrescrever valores ou documentos antigos. Encerrar guarda data e motivo e impede compromissos posteriores ao término; despesas futuras já geradas devem ser revisadas/canceladas manualmente. A demonstração não calcula encargos, benefícios nem proporcionalidade da folha automaticamente.
+
+**Gerar pagamentos do mês** no perfil gera apenas compromissos vigentes daquela pessoa, sem duplicação. Na lista da equipe, a ação gera para toda a equipe. Cada pagamento confirmado em Lançamentos aparece no perfil e no caixa pela mesma baixa; benefícios descritivos não geram pagamentos separados automaticamente.
+
+### Remover e arquivar cadastros
+
+Configurações oferece remoção com confirmação para empresas, categorias, pisos de reserva e documentos. Empresas/categorias sem uso são excluídas; aquelas com dependências ou histórico são arquivadas e podem ser restauradas. Categorias de salários/prestadores necessárias a contratações vigentes não podem ser removidas antes do encerramento dessas contratações. Empresas e categorias arquivadas saem das opções de novos registros, mas continuam nos relatórios e filtros históricos. Zerar/remover um piso não movimenta dinheiro em conta. Documentos removidos não são recuperáveis pelo botão Restaurar; a ação fica na auditoria.
+
+Perfis sem uso podem ser removidos; perfis com histórico ou usuário vinculado são arquivados após o término dos vínculos vigentes. Arquivar mantém contratos, pagamentos e participações anteriores. Restaurar reabilita o cadastro, sem reabrir contratações encerradas.
+
+Validação adicional: `npm run test:cadastros` com o servidor local em execução testa remoções, perfil próprio, contratação detalhada, anexos, edição, persistência e tela mobile usando dados fictícios.

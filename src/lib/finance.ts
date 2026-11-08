@@ -308,6 +308,7 @@ export function validateEntry(s: State, e: Entry) {
     typeof e.recognized !== "boolean" ||
     !Array.isArray(e.allocations) ||
     !s.categories.includes(e.category) ||
+    (s.archivedCategories ?? []).includes(e.category) ||
     (e.personId && !s.people.some((p) => p.id === e.personId))
   )
     throw Error("Tipo, categoria, pessoa ou classificação inválidos.");
@@ -317,7 +318,7 @@ export function validateEntry(s: State, e: Entry) {
   )
     throw Error("Classificação incompatível com a natureza do lançamento.");
   if (
-    !s.companies.some((c) => c.id === e.companyId) ||
+    !s.companies.some((c) => c.id === e.companyId && !c.archived) ||
     !s.projects.some((p) => p.id === e.projectId && p.companyId === e.companyId)
   )
     throw Error("Empresa e projeto incompatíveis.");

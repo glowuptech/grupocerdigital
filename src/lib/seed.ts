@@ -328,6 +328,10 @@ export function seed(): State {
     contracts: [
       {
         id: "ct1",
+        role: "Gestor administrativo",
+        workload: "40 horas semanais",
+        benefits: "Exemplo de benefícios a definir",
+        notes: "Condições fictícias para demonstração",
         personId: "rafael-p",
         projectId: "p6",
         companyId: "c1",
@@ -341,6 +345,9 @@ export function seed(): State {
       },
       {
         id: "ct2",
+        role: "Consultor de tecnologia",
+        workload: "Por entregas",
+        notes: "Prestação de serviços fictícia",
         personId: "rafael-p",
         projectId: "p3",
         companyId: "c1",

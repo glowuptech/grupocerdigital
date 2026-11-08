@@ -205,8 +205,19 @@ export function reallocate(
     throw Error("Saldo atribuído insuficiente.");
   s.reallocations.push({ id: uid(), from, to, amount, date });
 }
-export function generateContracts(s: State, month: string) {
+export function generateContracts(s: State, month: string, personId?: string) {
+  if (
+    !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) ||
+    (personId && !s.people.some((p) => p.id === personId))
+  )
+    throw Error("Pessoa ou mês inválido.");
   for (const c of s.contracts) {
+    if (personId && c.personId !== personId) continue;
+    if (
+      s.people.find((p) => p.id === c.personId)?.archived ||
+      s.companies.find((x) => x.id === c.companyId)?.archived
+    )
+      continue;
     const due = monthDate(month, c.day);
     if (
       due < c.start ||
@@ -239,6 +250,14 @@ export function generateContracts(s: State, month: string) {
 }
 export function addContract(s: State, c: Contract) {
   integer(c.amount);
+  if (
+    !validDate(c.start) ||
+    (c.end && !validDate(c.end)) ||
+    !Number.isInteger(c.day) ||
+    s.people.find((p) => p.id === c.personId)?.archived ||
+    s.companies.find((x) => x.id === c.companyId)?.archived
+  )
+    throw Error("Contratação inválida ou cadastro arquivado.");
   if (
     !s.people.some((p) => p.id === c.personId) ||
     !s.projects.some(

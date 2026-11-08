@@ -1,5 +1,11 @@
+import {
+  removeCompany,
+  removeCategory,
+  removePerson,
+  endContract,
+} from "./cadastros";
 import type { State, UserId, Entry, Contract, Composition } from "./model";
-import { uid, integer, today } from "./finance";
+import { uid, integer, today, validDate } from "./finance";
 import {
   addEntry,
   settle,
@@ -88,7 +94,7 @@ export function command(
     }
     case "account":
       if (
-        !s.companies.some((c) => c.id === str("companyId")) ||
+        !s.companies.some((c) => c.id === str("companyId") && !c.archived) ||
         !str("name").trim() ||
         !Number.isSafeInteger(num("opening"))
       )
@@ -103,7 +109,7 @@ export function command(
     case "project":
       if (
         !str("name").trim() ||
-        !s.companies.some((c) => c.id === str("companyId")) ||
+        !s.companies.some((c) => c.id === str("companyId") && !c.archived) ||
         !Number.isSafeInteger(num("opening")) ||
         !str("start")
       )
@@ -133,26 +139,84 @@ export function command(
         if (!project) throw Error("Projeto inválido.");
         project.reserve = num("amount");
       } else {
-        if (!s.companies.some((c) => c.id === str("companyId")))
+        if (!s.companies.some((c) => c.id === str("companyId") && !c.archived))
           throw Error("Empresa inválida.");
         s.generalReserves[str("companyId")] = num("amount");
       }
       break;
     }
     case "person":
-      if (!str("name").trim()) throw Error("Informe o nome.");
-      s.people.push({
-        id: uid(),
-        name: str("name"),
+    case "person-edit": {
+      if (
+        !str("name").trim() ||
+        (str("birthDate") && !validDate(str("birthDate")))
+      )
+        throw Error("Preencha nome e data de nascimento válida.");
+      const details = {
+        name: str("name").trim(),
         cpf: str("cpf"),
         rg: str("rg"),
-      });
+        email: str("email"),
+        phone: str("phone"),
+        birthDate: str("birthDate"),
+        address: str("address"),
+        notes: str("notes"),
+      };
+      if (type === "person") s.people.push({ id: uid(), ...details });
+      else {
+        const person = s.people.find((p) => p.id === str("id"));
+        if (!person) throw Error("Pessoa não encontrada.");
+        Object.assign(person, details);
+      }
       break;
+    }
+    case "remove-company":
+      removeCompany(s, str("id"));
+      break;
+    case "restore-company": {
+      const c = s.companies.find((c) => c.id === str("id"));
+      if (!c) throw Error("Empresa não encontrada.");
+      c.archived = false;
+      break;
+    }
+    case "remove-category":
+      removeCategory(s, str("name"));
+      break;
+    case "restore-category":
+      s.archivedCategories = (s.archivedCategories ?? []).filter(
+        (c) => c !== str("name"),
+      );
+      break;
+    case "remove-person":
+      removePerson(s, str("id"));
+      break;
+    case "restore-person": {
+      const p = s.people.find((p) => p.id === str("id"));
+      if (!p) throw Error("Pessoa não encontrada.");
+      p.archived = false;
+      break;
+    }
+    case "end-contract":
+      endContract(s, str("id"), str("end"), str("reason"));
+      break;
+    case "remove-attachment": {
+      const c = s.contracts.find((c) => c.id === str("id"));
+      const index = num("index");
+      if (
+        !c ||
+        !Number.isInteger(index) ||
+        !c.attachments[index] ||
+        c.attachments[index].name !== str("name")
+      )
+        throw Error("Documento não encontrado. Atualize a tela.");
+      c.attachments.splice(index, 1);
+      break;
+    }
     case "contract":
       addContract(s, { ...p, id: uid() } as unknown as Contract);
       break;
     case "generate-contracts":
-      generateContracts(s, str("month"));
+      generateContracts(s, str("month"), str("personId") || undefined);
       break;
     case "composition":
       addComposition(s, { ...p, id: uid() } as unknown as Composition);

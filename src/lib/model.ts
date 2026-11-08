@@ -19,6 +19,7 @@ export interface Company {
   name: string;
   tradeName: string;
   cnpj: string;
+  archived?: boolean;
 }
 export interface Project {
   id: string;
@@ -90,6 +91,12 @@ export interface Person {
   cpf: string;
   rg: string;
   userId?: UserId;
+  email?: string;
+  phone?: string;
+  birthDate?: string;
+  address?: string;
+  notes?: string;
+  archived?: boolean;
 }
 export interface Attachment {
   name: string;
@@ -108,6 +115,11 @@ export interface Contract {
   day: number;
   attachments: Attachment[];
   previousId?: string;
+  role?: string;
+  workload?: string;
+  benefits?: string;
+  notes?: string;
+  terminationReason?: string;
 }
 export interface Composition {
   id: string;
@@ -176,6 +188,7 @@ export interface State {
   compositions: Composition[];
   closings: Closing[];
   categories: string[];
+  archivedCategories?: string[];
   generalReserves: Record<string, number>;
   audit: Audit[];
 }

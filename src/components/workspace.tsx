@@ -71,7 +71,7 @@ const nav = [
   ["fluxo", "Fluxo de caixa", ChartNoAxesCombined],
   ["dre", "DRE gerencial", ChartPie],
   ["projetos", "Projetos", Layers],
-  ["pessoas", "Pessoas", Users],
+  ["pessoas", "Funcionários e equipe", Users],
   ["socios", "Sócios", Handshake],
   ["fechamento", "Fechamento", ClipboardCheck],
   ["configuracoes", "Configurações", Settings],
@@ -206,10 +206,12 @@ export default function Workspace({
   user,
   page,
   projectId,
+  personId,
 }: {
   user: UserId;
   page: string;
   projectId?: string;
+  personId?: string;
 }) {
   const router = useRouter(),
     search = useSearchParams();
@@ -320,18 +322,25 @@ export default function Workspace({
   const effectiveScope = projectId
     ? { companyId: selectedProject?.companyId, projectId }
     : scope;
-  const companies = s.companies.map((c) =>
-    option(c.id, `${c.tradeName || c.name} · ${c.cnpj || "CNPJ pendente"}`),
-  );
+  const companies = s.companies
+    .filter((c) => !c.archived)
+    .map((c) =>
+      option(c.id, `${c.tradeName || c.name} · ${c.cnpj || "CNPJ pendente"}`),
+    );
   const projects = s.projects
-    .filter((p) => !p.archived)
+    .filter(
+      (p) =>
+        !p.archived && !s.companies.find((c) => c.id === p.companyId)?.archived,
+    )
     .map((p) =>
       option(
         p.id,
         `${p.name} · ${s.companies.find((c) => c.id === p.companyId)?.tradeName}`,
       ),
     );
-  const people = s.people.map((p) => option(p.id, p.name));
+  const people = s.people
+    .filter((p) => !p.archived)
+    .map((p) => option(p.id, p.name));
   const accounts = s.accounts.map((a) =>
     option(
       a.id,
@@ -355,11 +364,13 @@ export default function Workspace({
       (!effectiveScope.companyId || e.companyId === effectiveScope.companyId) &&
       (!effectiveScope.projectId || entryAmount(e, effectiveScope) > 0),
   );
-  const title = projectId
-    ? selectedProject?.name || "Projeto não encontrado"
-    : page === "pessoal"
-      ? "Meu Financeiro"
-      : nav.find((n) => n[0] === page)?.[1] || "Visão geral";
+  const title = personId
+    ? s.people.find((p) => p.id === personId)?.name || "Perfil não encontrado"
+    : projectId
+      ? selectedProject?.name || "Projeto não encontrado"
+      : page === "pessoal"
+        ? "Meu Financeiro"
+        : nav.find((n) => n[0] === page)?.[1] || "Visão geral";
   function goEntries(extra: string) {
     router.push(
       `/lancamentos?empresa=${effectiveScope.companyId || ""}&projeto=${effectiveScope.projectId || ""}&de=${start}&ate=${today()}&${extra}`,
@@ -415,7 +426,9 @@ export default function Workspace({
         select(
           "category",
           "Categoria",
-          s!.categories.map((c) => option(c, c)),
+          s!.categories
+            .filter((c) => !(s!.archivedCategories ?? []).includes(c))
+            .map((c) => option(c, c)),
           defaultKind === "receita"
             ? "Vendas"
             : defaultKind === "despesa"
@@ -1843,157 +1856,434 @@ export default function Workspace({
       </>
     );
   }
+  function editPerson(person?: State["people"][number]) {
+    open(
+      person ? "Editar perfil" : "Cadastrar funcionário ou prestador",
+      [
+        field("name", "Nome completo", person?.name || ""),
+        field("cpf", "CPF", person?.cpf || "", "text", { required: false }),
+        field("rg", "RG", person?.rg || "", "text", { required: false }),
+        field("email", "E-mail", person?.email || "", "email", {
+          required: false,
+        }),
+        field("phone", "Telefone", person?.phone || "", "tel", {
+          required: false,
+        }),
+        field(
+          "birthDate",
+          "Data de nascimento",
+          person?.birthDate || "",
+          "date",
+          { required: false },
+        ),
+        field("address", "Endereço", person?.address || "", "text", {
+          required: false,
+        }),
+        field(
+          "notes",
+          "Observações do cadastro",
+          person?.notes || "",
+          "textarea",
+          { required: false },
+        ),
+      ],
+      (d) =>
+        mutate(person ? "person-edit" : "person", { ...d, id: person?.id }),
+      "Cadastre a pessoa uma vez. Depois, abra seu perfil para adicionar as contratações CLT ou PJ e os documentos. Use apenas dados fictícios nesta demonstração.",
+    );
+  }
+  function documentList(c: State["contracts"][number]) {
+    return (
+      <div className="contract-documents">
+        {c.attachments.length === 0 && (
+          <p className="micro">Nenhum documento anexado nesta contratação.</p>
+        )}
+        {c.attachments.map((a, index) => (
+          <div className="document-item" key={index}>
+            <a className="text-link" href={a.data} download={a.name}>
+              {a.name}
+            </a>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                open(
+                  "Remover documento",
+                  [],
+                  () =>
+                    mutate("remove-attachment", {
+                      id: c.id,
+                      index,
+                      name: a.name,
+                    }),
+                  `Remover ${a.name}? A contratação e os pagamentos serão preservados.`,
+                )
+              }
+            >
+              Remover documento
+            </Button>
+          </div>
+        ))}
+        <label className="upload-row">
+          Anexar contrato ou documento fictício (PDF/TXT, até 500 KB)
+          <input
+            aria-label={`Documento da contratação ${c.id}`}
+            type="file"
+            accept="application/pdf,text/plain"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (
+                file.size > 500000 ||
+                !["application/pdf", "text/plain"].includes(file.type)
+              ) {
+                setError("Use PDF ou TXT com até 500 KB.");
+                return;
+              }
+              const reader = new FileReader();
+              reader.onload = () =>
+                run(() =>
+                  mutate("attachment", {
+                    id: c.id,
+                    name: file.name,
+                    data: reader.result,
+                  }),
+                );
+              reader.readAsDataURL(file);
+            }}
+          />
+        </label>
+      </div>
+    );
+  }
   function peoplePage() {
+    const person = s!.people.find((p) => p.id === personId);
+    if (personId && !person)
+      return (
+        <Empty text="Perfil não encontrado. Volte a Funcionários e equipe." />
+      );
+    if (!person)
+      return (
+        <>
+          <div className="notice">
+            <Users size={24} />
+            <p>
+              <b>Funcionários CLT, prestadores PJ e demais pessoas do grupo.</b>{" "}
+              Primeiro cadastre a pessoa; depois abra o perfil e adicione uma
+              contratação com empresa, projeto, função, salário ou honorários. A
+              participação societária continua em Sócios.
+            </p>
+          </div>
+          <div className="toolbar">
+            <Button onClick={() => editPerson()}>
+              <Plus size={16} />
+              Cadastrar funcionário / prestador
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                open(
+                  "Preparar pagamentos da equipe",
+                  [field("month", "Mês dos pagamentos", month, "month")],
+                  (d) => mutate("generate-contracts", d),
+                  "Cria uma despesa pendente por contratação vigente. Repetir esta ação não duplica pagamentos; confirme cada pagamento em Lançamentos.",
+                )
+              }
+            >
+              Gerar pagamentos do mês
+            </Button>
+          </div>
+          <div className="people-grid">
+            {s!.people.map((p) => {
+              const contracts = s!.contracts.filter((c) => c.personId === p.id),
+                active = contracts.filter(
+                  (c) => c.start <= today() && (!c.end || c.end >= today()),
+                );
+              return (
+                <section className="person-card" key={p.id}>
+                  <div className="person-card-header">
+                    <span className="avatar">{p.name[0]}</span>
+                    <span
+                      className={
+                        "status " +
+                        (p.archived
+                          ? "cancelled"
+                          : active.length
+                            ? "done"
+                            : "pending")
+                      }
+                    >
+                      {p.archived
+                        ? "Arquivado"
+                        : active.length
+                          ? "Contratação vigente"
+                          : "Sem contratação vigente"}
+                    </span>
+                  </div>
+                  <h2>{p.name}</h2>
+                  <p>
+                    {active
+                      .map(
+                        (c) =>
+                          `${c.role || c.type} · ${s!.projects.find((pr) => pr.id === c.projectId)?.name}`,
+                      )
+                      .join(" / ") ||
+                      "Abra o perfil para consultar ou cadastrar uma contratação."}
+                  </p>
+                  <small>
+                    {contracts.length} contratação(ões) no histórico{" "}
+                    {p.userId ? "· Também tem acesso ao aplicativo" : ""}
+                  </small>
+                  <Button asChild>
+                    <Link href={"/pessoas/" + p.id}>
+                      Abrir perfil <ArrowRight size={16} />
+                    </Link>
+                  </Button>
+                </section>
+              );
+            })}
+          </div>
+        </>
+      );
+    const contracts = s!.contracts.filter((c) => c.personId === person.id),
+      entries = s!.entries.filter(
+        (e) => e.personId === person.id && e.kind === "despesa",
+      ),
+      remuneration = entries.filter((e) => e.kind !== "distribuicao");
     return (
       <>
-        <div className="toolbar">
-          <Button
-            onClick={() =>
-              open(
-                "Cadastrar pessoa",
-                [
-                  field("name", "Nome"),
-                  field("cpf", "CPF fictício", "", "text", { required: false }),
-                  field("rg", "RG fictício", "", "text", { required: false }),
-                ],
-                (d) => mutate("person", d),
-              )
-            }
-          >
-            <Plus size={16} />
-            Nova pessoa
-          </Button>
-          <Button variant="outline" onClick={() => newContract()}>
-            Novo vínculo
+        <Link className="text-link" href="/pessoas">
+          ← Funcionários e equipe
+        </Link>
+        <section className="person-profile-header">
+          <span className="avatar">{person.name[0]}</span>
+          <div>
+            <h2>{person.name}</h2>
+            <p>
+              {person.archived
+                ? "Perfil arquivado"
+                : "Ficha de funcionário / prestador"}{" "}
+              · {contracts.length} contratação(ões)
+            </p>
+          </div>
+          <Button variant="outline" onClick={() => editPerson(person)}>
+            Editar dados pessoais
           </Button>
           <Button
             variant="outline"
             onClick={() =>
               open(
-                "Gerar compromissos dos vínculos",
-                [field("month", "Competência", month, "month")],
-                (d) => mutate("generate-contracts", d),
-                "Geração idempotente: um compromisso por vínculo e competência vigente.",
+                person.archived ? "Restaurar perfil" : "Remover perfil",
+                [],
+                () =>
+                  mutate(person.archived ? "restore-person" : "remove-person", {
+                    id: person.id,
+                  }),
+                "Um perfil sem uso pode ser excluído. Com histórico, será arquivado. Encerre as contratações vigentes antes de arquivar. O histórico financeiro permanece disponível.",
               )
             }
           >
-            Gerar compromissos
+            {person.archived ? "Restaurar perfil" : "Remover / arquivar"}
           </Button>
-        </div>
-        {s!.people.map((person) => {
-          const entries = s!.entries.filter(
-            (e) =>
-              e.personId === person.id &&
-              ["receita", "despesa"].includes(e.kind),
-          );
-          return (
-            <Section
-              key={person.id}
-              title={person.name}
-              sub={`${person.cpf} · ${person.rg}${person.userId ? " · Usuário vinculado: " + person.userId : ""}`}
-              action={
-                <span className="badge subdued">
-                  Pago: {money(entries.reduce((n, e) => n + paid(s!, e.id), 0))}
+        </section>
+        <Section
+          title="Dados pessoais e contato"
+          sub="Este cadastro não cria uma conta de acesso ao aplicativo."
+        >
+          <dl className="profile-fields">
+            {[
+              ["CPF", person.cpf],
+              ["RG", person.rg],
+              ["E-mail", person.email],
+              ["Telefone", person.phone],
+              [
+                "Nascimento",
+                person.birthDate ? dateLabel(person.birthDate) : "",
+              ],
+              ["Endereço", person.address],
+              ["Observações", person.notes],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{value || "Não informado"}</dd>
+              </div>
+            ))}
+          </dl>
+        </Section>
+        <Section
+          title="Contratações e condições de trabalho"
+          sub="Cada empresa/projeto pode ter uma contratação. Reajustes geram novas condições e preservam as anteriores."
+          action={
+            !person.archived && (
+              <Button onClick={() => newContract(undefined, person.id)}>
+                <Plus size={16} />
+                Adicionar contratação
+              </Button>
+            )
+          }
+        >
+          {!contracts.length && (
+            <Empty text="Ainda não há contratação. Clique em Adicionar contratação para registrar admissão, função e remuneração." />
+          )}
+          {contracts.map((c) => (
+            <article className="contract-card" key={c.id}>
+              <header>
+                <div>
+                  <h3>
+                    {c.role || "Função não informada"} · {c.type}
+                  </h3>
+                  <p>
+                    {s!.companies.find((co) => co.id === c.companyId)?.name} ·{" "}
+                    {s!.projects.find((p) => p.id === c.projectId)?.name}
+                  </p>
+                </div>
+                <span
+                  className={
+                    "status " +
+                    (c.end && c.end < today()
+                      ? "cancelled"
+                      : c.start > today()
+                        ? "pending"
+                        : "done")
+                  }
+                >
+                  {c.end && c.end < today()
+                    ? "Encerrada"
+                    : c.start > today()
+                      ? "Início futuro"
+                      : "Vigente"}
                 </span>
-              }
-            >
-              <Table
-                heads={[
-                  "Projeto / vínculo",
-                  "Vigência",
-                  "Condição mensal",
-                  "Documentos",
-                  "Histórico",
-                ]}
-              >
-                {s!.contracts
-                  .filter((c) => c.personId === person.id)
-                  .map((c) => (
-                    <tr key={c.id}>
-                      <td>
-                        {s!.projects.find((p) => p.id === c.projectId)?.name}
-                        <small>
-                          {c.type} · {c.cnpj || "Sem CNPJ"}
-                        </small>
-                      </td>
-                      <td>
-                        {dateLabel(c.start)} →{" "}
-                        {c.end ? dateLabel(c.end) : "Em andamento"}
-                        <small>
-                          {Math.max(
-                            0,
-                            Math.floor(
-                              (Date.parse(today()) - Date.parse(c.start)) /
-                                86400000,
+              </header>
+              <dl className="profile-fields">
+                {[
+                  ["Admissão / início", dateLabel(c.start)],
+                  ["Término", c.end ? dateLabel(c.end) : "Prazo indeterminado"],
+                  ["Salário / honorários mensais", money(c.amount)],
+                  ["Dia do pagamento", String(c.day)],
+                  ["Jornada / carga horária", c.workload || "Não informada"],
+                  ["CNPJ do prestador", c.cnpj || "Não se aplica"],
+                  ["Benefícios", c.benefits || "Não informados"],
+                  ["Condições / observações", c.notes || "Não informadas"],
+                  ["Motivo do encerramento", c.terminationReason || "—"],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="toolbar">
+                {!person.archived && (!c.end || c.end >= today()) && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => newContract(c.id, person.id)}
+                    >
+                      Reajustar / renovar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        open(
+                          "Encerrar contratação",
+                          [
+                            dateField("end", "Data do desligamento / término"),
+                            field(
+                              "reason",
+                              "Motivo do encerramento",
+                              "",
+                              "textarea",
                             ),
-                          )}{" "}
-                          dias desde o início
-                        </small>
-                      </td>
-                      <td>
-                        {money(c.amount)}
-                        <small>Dia {c.day}</small>
-                      </td>
-                      <td>
-                        {c.attachments.map((a, i) => (
-                          <a
-                            className="text-link"
-                            href={a.data}
-                            download={a.name}
-                            key={i}
-                          >
-                            {a.name}
-                          </a>
-                        ))}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => newContract(c.id)}
-                        >
-                          Reajustar / renovar
-                        </Button>
-                      </td>
-                      <td>
-                        {s!.entries
-                          .filter((e) => e.contractId === c.id)
-                          .map((e) => (
-                            <div key={e.id}>
-                              {e.competence.slice(0, 7)} ·{" "}
-                              {money(paid(s!, e.id))} pagos
-                              <small>
-                                {money(remaining(s!, e))} pendentes ·{" "}
-                                {status(s!, e) === "Efetivado"
-                                  ? incoming(e)
-                                    ? "Recebido"
-                                    : "Pago"
-                                  : status(s!, e) === "Parcial"
-                                    ? "Parte pendente"
-                                    : status(s!, e) === "Vencido"
-                                      ? "Em atraso"
-                                      : status(s!, e)}
-                              </small>
-                            </div>
-                          ))}
-                      </td>
-                    </tr>
-                  ))}
-              </Table>
-              <details>
-                <summary>Histórico único de pagamentos da pessoa</summary>
-                {entryTable(entries)}
-              </details>
-            </Section>
-          );
-        })}
+                          ],
+                          (d) => mutate("end-contract", { id: c.id, ...d }),
+                          "Preserva documentos, condições e pagamentos anteriores. Revise e cancele manualmente eventuais despesas futuras que já tenham sido geradas.",
+                        )
+                      }
+                    >
+                      Encerrar contratação
+                    </Button>
+                  </>
+                )}
+              </div>
+              <h3>Contrato e documentos</h3>
+              {documentList(c)}
+            </article>
+          ))}
+        </Section>
+        <Section
+          title="Pagamentos e pendências da pessoa"
+          sub="Salários e honorários de todas as contratações. Distribuições societárias aparecem separadamente em Sócios."
+          action={
+            <div className="profile-payment-actions">
+              <span className="badge subdued">
+                Pago:{" "}
+                {money(remuneration.reduce((n, e) => n + paid(s!, e.id), 0))}
+              </span>
+              {!person.archived && (
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    open(
+                      "Gerar pagamentos desta pessoa",
+                      [field("month", "Mês dos pagamentos", month, "month")],
+                      (d) =>
+                        mutate("generate-contracts", {
+                          ...d,
+                          personId: person.id,
+                        }),
+                      "Cria apenas os compromissos desta pessoa, sem duplicar os que já existem. Confirme os pagamentos na lista abaixo.",
+                    )
+                  }
+                >
+                  Gerar pagamentos do mês
+                </Button>
+              )}
+            </div>
+          }
+        >
+          <Table
+            heads={[
+              "Mês",
+              "Contratação / projeto",
+              "Previsto",
+              "Pago",
+              "Pendente",
+            ]}
+          >
+            {remuneration.map((e) => (
+              <tr key={e.id}>
+                <td>{e.competence.slice(0, 7)}</td>
+                <td>
+                  {e.title}
+                  <small>
+                    {s!.projects.find((p) => p.id === e.projectId)?.name} ·{" "}
+                    {e.contractId || "Avulso"}
+                  </small>
+                </td>
+                <td>{money(e.amount)}</td>
+                <td className="positive">{money(paid(s!, e.id))}</td>
+                <td className="negative">
+                  {money(e.cancelled ? 0 : remaining(s!, e))}
+                </td>
+              </tr>
+            ))}
+          </Table>
+          {entryTable(remuneration)}
+        </Section>
       </>
     );
   }
-  function newContract(previousId?: string) {
+  function newContract(previousId?: string, selectedPersonId?: string) {
     const previous = s!.contracts.find((c) => c.id === previousId);
     open(
-      previous ? "Reajustar vínculo" : "Novo vínculo",
+      previous ? "Reajustar contratação" : "Nova contratação",
       [
-        select("personId", "Pessoa", people, previous?.personId),
+        select(
+          "personId",
+          "Funcionário / prestador",
+          people,
+          previous?.personId || selectedPersonId,
+        ),
         select(
           "projectId",
           "Projeto / administrativo",
@@ -2017,6 +2307,28 @@ export default function Workspace({
           previous ? (previous.amount / 100).toFixed(2) : "",
         ),
         field("day", "Dia do pagamento", previous?.day || 5, "number"),
+        field("role", "Cargo / função", previous?.role || ""),
+        field(
+          "workload",
+          "Jornada / carga horária",
+          previous?.workload || "",
+          "text",
+          { required: false },
+        ),
+        field(
+          "benefits",
+          "Benefícios e condições adicionais",
+          previous?.benefits || "",
+          "textarea",
+          { required: false },
+        ),
+        field(
+          "notes",
+          "Observações da contratação",
+          previous?.notes || "",
+          "textarea",
+          { required: false },
+        ),
       ],
       async (d) => {
         const project = s!.projects.find((p) => p.id === d.projectId)!;
@@ -2029,7 +2341,7 @@ export default function Workspace({
           previousId,
         });
       },
-      "As condições anteriores ficam preservadas. Para anexar um documento fictício, use o campo abaixo da lista de vínculos em Configurações.",
+      "Informe a contratação desta pessoa. A empresa é definida pelo projeto. Os documentos ficam no perfil; reajustes preservam as condições anteriores.",
     );
   }
   function partnersPage() {
@@ -2385,12 +2697,41 @@ export default function Workspace({
             </Button>
           }
         >
-          <Table heads={["Razão social", "Nome fantasia", "CNPJ"]}>
+          <Table
+            heads={[
+              "Razão social",
+              "Nome fantasia",
+              "CNPJ",
+              "Situação",
+              "Ações",
+            ]}
+          >
             {s!.companies.map((c) => (
               <tr key={c.id}>
                 <td>{c.name}</td>
                 <td>{c.tradeName}</td>
                 <td>{c.cnpj || "Pendente · em preparação"}</td>
+                <td>{c.archived ? "Arquivada" : "Ativa"}</td>
+                <td>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      open(
+                        c.archived ? "Restaurar empresa" : "Remover empresa",
+                        [],
+                        () =>
+                          mutate(
+                            c.archived ? "restore-company" : "remove-company",
+                            { id: c.id },
+                          ),
+                        "Empresa sem cadastros ou histórico será excluída. Se já tiver contas, projetos, reservas ou movimentos, será arquivada e sairá das opções para novos cadastros. O histórico será preservado.",
+                      )
+                    }
+                  >
+                    {c.archived ? "Restaurar" : "Remover / arquivar"}
+                  </Button>
+                </td>
               </tr>
             ))}
           </Table>
@@ -2417,7 +2758,36 @@ export default function Workspace({
           >
             <div className="tags">
               {s!.categories.map((c) => (
-                <span key={c}>{c}</span>
+                <span key={c}>
+                  {c}
+                  {(s!.archivedCategories ?? []).includes(c)
+                    ? " · Arquivada"
+                    : ""}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      open(
+                        (s!.archivedCategories ?? []).includes(c)
+                          ? "Restaurar categoria"
+                          : "Remover categoria",
+                        [],
+                        () =>
+                          mutate(
+                            (s!.archivedCategories ?? []).includes(c)
+                              ? "restore-category"
+                              : "remove-category",
+                            { name: c },
+                          ),
+                        "Categorias sem uso serão excluídas. As utilizadas em lançamentos serão arquivadas; o histórico continua com a categoria original.",
+                      )
+                    }
+                  >
+                    {(s!.archivedCategories ?? []).includes(c)
+                      ? "Restaurar"
+                      : "Remover"}
+                  </Button>
+                </span>
               ))}
             </div>
           </Section>
@@ -2460,12 +2830,46 @@ export default function Workspace({
                 <div key={c.id}>
                   <span>Geral · {c.tradeName}</span>
                   <b>{money(s!.generalReserves[c.id] || 0)}</b>
+                  {Boolean(s!.generalReserves[c.id]) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        open(
+                          "Remover piso de reserva",
+                          [],
+                          () =>
+                            mutate("reserve", { companyId: c.id, amount: 0 }),
+                          "O piso geral ficará zerado; nenhum movimento bancário será alterado.",
+                        )
+                      }
+                    >
+                      Remover piso
+                    </Button>
+                  )}
                 </div>
               ))}
               {s!.projects.map((p) => (
                 <div key={p.id}>
                   <span>{p.name}</span>
                   <b>{money(p.reserve)}</b>
+                  {p.reserve > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        open(
+                          "Remover piso do projeto",
+                          [],
+                          () =>
+                            mutate("reserve", { projectId: p.id, amount: 0 }),
+                          "O piso ficará zerado; o saldo e os lançamentos serão preservados.",
+                        )
+                      }
+                    >
+                      Remover piso
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -2481,38 +2885,16 @@ export default function Workspace({
           sub="Somente arquivos fictícios, PDF ou texto, até 500 KB. Acesso restrito à sessão empresarial."
         >
           {s!.contracts.map((c) => (
-            <label className="upload-row" key={c.id}>
-              <span>
-                {s!.people.find((p) => p.id === c.personId)?.name} ·{" "}
-                {s!.projects.find((p) => p.id === c.projectId)?.name}
-              </span>
-              <input
-                aria-label={`Anexar documento ao vínculo ${c.id}`}
-                type="file"
-                accept="application/pdf,text/plain"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  if (
-                    file.size > 500000 ||
-                    !["application/pdf", "text/plain"].includes(file.type)
-                  ) {
-                    setError("Use PDF ou TXT com até 500 KB.");
-                    return;
-                  }
-                  const reader = new FileReader();
-                  reader.onload = () =>
-                    run(() =>
-                      mutate("attachment", {
-                        id: c.id,
-                        name: file.name,
-                        data: reader.result,
-                      }),
-                    );
-                  reader.readAsDataURL(file);
-                }}
-              />
-            </label>
+            <div className="settings-documents" key={c.id}>
+              <h3>
+                <Link className="text-link" href={"/pessoas/" + c.personId}>
+                  {s!.people.find((p) => p.id === c.personId)?.name} ·{" "}
+                  {s!.projects.find((p) => p.id === c.projectId)?.name} → Abrir
+                  perfil
+                </Link>
+              </h3>
+              {documentList(c)}
+            </div>
           ))}
         </Section>
         <Section
@@ -3077,78 +3459,81 @@ export default function Workspace({
               </Button>
             )}
           </div>
-          <div className="scope-bar">
-            <div>
-              {page !== "pessoal" && (
-                <>
-                  <label>
-                    <BuildingIcon />
-                    <select
-                      aria-label="Filtrar empresa"
-                      value={
-                        projectId
-                          ? selectedProject?.companyId || company
-                          : company
-                      }
-                      disabled={Boolean(projectId)}
-                      onChange={(e) => {
-                        setCompany(e.target.value);
-                        setProject("");
-                      }}
-                    >
-                      <option value="">Todas as empresas</option>
-                      {companies.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <Layers size={15} />
-                    <select
-                      aria-label="Filtrar projeto"
-                      value={projectId || project}
-                      disabled={Boolean(projectId)}
-                      onChange={(e) => setProject(e.target.value)}
-                    >
-                      <option value="">Todos os projetos</option>
-                      {s.projects
-                        .filter(
-                          (p) =>
-                            !(projectId
-                              ? selectedProject?.companyId
-                              : company) ||
-                            p.companyId ===
-                              (projectId
-                                ? selectedProject?.companyId
-                                : company),
-                        )
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
+          {page !== "pessoas" && (
+            <div className="scope-bar">
+              <div>
+                {page !== "pessoal" && (
+                  <>
+                    <label>
+                      <BuildingIcon />
+                      <select
+                        aria-label="Filtrar empresa"
+                        value={
+                          projectId
+                            ? selectedProject?.companyId || company
+                            : company
+                        }
+                        disabled={Boolean(projectId)}
+                        onChange={(e) => {
+                          setCompany(e.target.value);
+                          setProject("");
+                        }}
+                      >
+                        <option value="">Todas as empresas</option>
+                        {s.companies.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.tradeName || c.name}
+                            {c.archived ? " · Arquivada" : ""}
                           </option>
                         ))}
-                    </select>
-                  </label>
-                </>
-              )}
+                      </select>
+                    </label>
+                    <label>
+                      <Layers size={15} />
+                      <select
+                        aria-label="Filtrar projeto"
+                        value={projectId || project}
+                        disabled={Boolean(projectId)}
+                        onChange={(e) => setProject(e.target.value)}
+                      >
+                        <option value="">Todos os projetos</option>
+                        {s.projects
+                          .filter(
+                            (p) =>
+                              !(projectId
+                                ? selectedProject?.companyId
+                                : company) ||
+                              p.companyId ===
+                                (projectId
+                                  ? selectedProject?.companyId
+                                  : company),
+                          )
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  </>
+                )}
+              </div>
+              <label>
+                <CalendarDays size={15} />
+                <select
+                  aria-label="Período dos indicadores"
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value)}
+                >
+                  {["1", "3", "6", "12"].map((m) => (
+                    <option value={m} key={m}>
+                      Últimos {m} {m === "1" ? "mês" : "meses"}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-            <label>
-              <CalendarDays size={15} />
-              <select
-                aria-label="Período dos indicadores"
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-              >
-                {["1", "3", "6", "12"].map((m) => (
-                  <option value={m} key={m}>
-                    Últimos {m} {m === "1" ? "mês" : "meses"}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          )}
           {error && (
             <div className="alert error" role="alert">
               {error}

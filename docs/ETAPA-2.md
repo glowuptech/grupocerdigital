@@ -42,3 +42,7 @@ Chave única `(source, account_id, external_id)`. Importação não cria receita
 ## Decisões necessárias
 
 Formalizar reservas/cobertura, compensação de prejuízos, retenção por projeto, aprovação e bloqueio por caixa; autorização de reabertura e períodos travados; classificação contábil de cada movimento entre CNPJs; banco para conciliação automática; política de retenção e documentos; distribuição de ajustes retroativos. As políticas locais são exemplos identificados e não políticas contábeis definitivas.
+
+## Ciclo de vida de cadastros e ficha da equipe
+
+Levar para PostgreSQL os novos campos opcionais: `holding_companies.archived`, `holding_people` (email, phone, birth_date, address, notes, archived), `holding_contracts`/versões (role, workload, benefits, notes, termination_reason) e `holding_categories.archived`. Manter os usuários Auth separados de pessoas. Usar FK com RESTRICT para impedir exclusões em cascata de empresas/pessoas/categorias utilizadas; arquivar em vez de apagar histórico. Reservas removidas ficam com piso zero. Remoção de anexo exige autorização empresarial, exclusão do objeto privado e auditoria sem copiar o conteúdo do documento. Eventos de remoção/arquivamento/restauração e desligamento precisam de autor, horário e referência. Validar dependências e geração de folha em transação, inclusive categoria exigida por contratações ativas. Não executar migrações desta proposta na Etapa 1.
