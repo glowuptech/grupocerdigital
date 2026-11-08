@@ -1,13 +1,16 @@
 /** The deployment proxy must overwrite forwarded headers, never append client input. */
 export function publicOrigin(request: Request): string | null {
-  const configured = process.env.APP_ORIGIN || process.env.V0_RUNTIME_URL || process.env.V0_BUILD_URL;
-  if (configured) {
-    try { return new URL(configured).origin; } catch { return null; }
-  }
   const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
   const protocol = request.headers.get('x-forwarded-proto') || new URL(request.url).protocol.replace(':', '');
-  if (!host || /[,\s/\\@?#]/.test(host) || !['http', 'https'].includes(protocol)) return null;
-  try { return new URL(`${protocol}://${host}`).origin; } catch { return null; }
+  if (host && !/[,\s/\\@?#]/.test(host) && ['http', 'https'].includes(protocol)) {
+    try { return new URL(`${protocol}://${host}`).origin; } catch {}
+  }
+
+  const configured = process.env.APP_ORIGIN || process.env.V0_RUNTIME_URL || process.env.V0_BUILD_URL;
+  if (configured) {
+    try { return new URL(configured).origin; } catch {}
+  }
+  return null;
 }
 function isVercelPreviewOrigin(origin: URL): boolean {
   return origin.protocol === 'https:' &&
