@@ -75,11 +75,13 @@ try {
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   const row = page.getByRole("row").filter({ hasText: transactionTitle });
-  await row.getByRole("button", { name: "Baixar", exact: true }).click();
-  await page.getByLabel("Valor da baixa (R$)").fill("40");
+  await row
+    .getByRole("button", { name: "Marcar como pago", exact: true })
+    .click();
+  await page.getByLabel("Valor pago / recebido (R$)").fill("40");
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
-  await row.getByText("Parcial", { exact: true }).waitFor();
+  await row.getByText("Parte pendente", { exact: true }).waitFor();
   assert.match(await row.innerText(), /61,01/);
   checks.push("lançamento e baixa parcial pela interface");
   const post = async (request, path, type, payload) => {

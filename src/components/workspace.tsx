@@ -67,7 +67,7 @@ import { FormModal, type FormSpec, type Field } from "./forms";
 const nav = [
   ["dashboard", "Visão geral", LayoutDashboard],
   ["lancamentos", "Lançamentos", ArrowLeftRight],
-  ["contas", "Contas e conciliação", Wallet],
+  ["contas", "Contas", Wallet],
   ["fluxo", "Fluxo de caixa", ChartNoAxesCombined],
   ["dre", "DRE gerencial", ChartPie],
   ["projetos", "Projetos", Layers],
@@ -381,14 +381,36 @@ export default function Workspace({
           [
             option("despesa", "Despesa"),
             option("receita", "Recebimento"),
-            option("distribuicao", "Distribuição"),
-            option("adiantamento", "Adiantamento de sócio"),
-            option("aporte", "Aporte de capital"),
-            option("devolucao", "Devolução de adiantamento"),
+            ...(!["receita", "despesa"].includes(defaultKind)
+              ? [
+                  option("distribuicao", "Distribuição"),
+                  option("adiantamento", "Adiantamento de sócio"),
+                  option("aporte", "Aporte de capital"),
+                  option("devolucao", "Devolução de adiantamento"),
+                ]
+              : []),
           ],
           defaultKind,
         ),
         field("title", "Título"),
+        select("paymentState", "Situação", [
+          option("pending", "Ainda está pendente"),
+          option("paid", "Já paguei / já recebi"),
+        ]),
+        {
+          ...select(
+            "paidAccount",
+            "Conta do pagamento / recebimento",
+            accounts,
+          ),
+          required: false,
+          showWhen: { field: "paymentState", value: "paid" },
+        },
+        {
+          ...dateField("paidDate", "Data do pagamento / recebimento"),
+          required: false,
+          showWhen: { field: "paymentState", value: "paid" },
+        },
         moneyField(),
         select(
           "category",
@@ -406,6 +428,7 @@ export default function Workspace({
           "dre",
           "Classificação na DRE",
           [
+            option("auto", "Automática pelo tipo"),
             option("operacional", "Despesas operacionais / administrativas"),
             option("receita", "Receita bruta"),
             option("deducao", "Deduções e tributos sobre receita"),
@@ -414,11 +437,7 @@ export default function Workspace({
             option("tributo", "Tributos sobre resultado"),
             option("fora", "Fora da DRE"),
           ],
-          defaultKind === "receita"
-            ? "receita"
-            : !["receita", "despesa"].includes(defaultKind)
-              ? "fora"
-              : "operacional",
+          "auto",
         ),
         dateField("competence", "Competência", month + "-01"),
         dateField("due", "Vencimento"),
@@ -450,7 +469,26 @@ export default function Workspace({
           option("percent", "Porcentagem para o segundo projeto"),
         ]),
         field("splitValue", "Parcela do segundo projeto", "0", "text"),
-      ],
+      ].map((f) => ({
+        ...f,
+        advanced:
+          [
+            "dre",
+            "competence",
+            "recognized",
+            "personId",
+            "advanceId",
+            "description",
+            "end",
+            "splitProject",
+            "splitMode",
+            "splitValue",
+          ].includes(f.name) &&
+          !(
+            !["receita", "despesa"].includes(defaultKind) &&
+            ["personId", "advanceId"].includes(f.name)
+          ),
+      })),
       async (d) => {
         const p = s!.projects.find((p) => p.id === d.projectId)!;
         const amount = cents(d.amount);
@@ -491,20 +529,30 @@ export default function Workspace({
           allocations,
           personId: d.personId || undefined,
           advanceId: d.advanceId || undefined,
-          dre: d.dre,
+          dre:
+            d.dre === "auto"
+              ? d.kind === "receita"
+                ? "receita"
+                : d.kind === "despesa"
+                  ? "operacional"
+                  : "fora"
+              : d.dre,
           end: d.end,
+          paymentState: d.paymentState,
+          paidAccount: d.paidAccount,
+          paidDate: d.paidDate,
         });
       },
-      "O lançamento começa pendente. O caixa só muda quando uma baixa é efetivada.",
+      "Informe o valor, o projeto e a data. Se já pagou ou recebeu, registre tudo de uma vez.",
     );
   }
   function pay(e: Entry) {
     open(
-      incoming(e) ? "Efetivar recebimento" : "Efetivar pagamento",
+      incoming(e) ? "Marcar como recebido" : "Marcar como pago",
       [
         moneyField(
           "amount",
-          "Valor da baixa (R$)",
+          "Valor pago / recebido (R$)",
           (remaining(s!, e) / 100).toFixed(2),
         ),
         select(
@@ -525,7 +573,7 @@ export default function Workspace({
           accountId: d.accountId,
           date: d.date,
         }),
-      `${e.title} · Pendente: ${money(remaining(s!, e))}. Baixas parciais preservam o saldo restante.`,
+      `${e.title} · Pendente: ${money(remaining(s!, e))}. Pode informar um valor menor; o restante continuará pendente.`,
     );
   }
   function entryTable(entries: Entry[], compact = false) {
@@ -537,7 +585,7 @@ export default function Workspace({
             : [
                 "Lançamento / categoria",
                 "Empresa / projeto",
-                "Competência / vencimento",
+                "Quando vence",
                 "Valor / pendente",
                 "Situação",
                 "Ações",
@@ -545,7 +593,10 @@ export default function Workspace({
         }
       >
         {entries.map((e) => (
-          <tr key={e.id}>
+          <tr
+            key={e.id}
+            className={incoming(e) ? "entry-income" : "entry-expense"}
+          >
             <td>
               <span
                 className={
@@ -559,6 +610,13 @@ export default function Workspace({
                 )}
               </span>
               <div className="cell-text">
+                <span
+                  className={
+                    incoming(e) ? "entry-type income" : "entry-type expense"
+                  }
+                >
+                  {incoming(e) ? "Recebimento" : "Despesa"}
+                </span>
                 <b>{e.title}</b>
                 <small>
                   {e.category}
@@ -575,13 +633,10 @@ export default function Workspace({
                     {s!.companies.find((c) => c.id === e.companyId)?.tradeName}
                   </small>
                 </td>
-                <td>
-                  {dateLabel(e.competence)}
-                  <small>Vence {dateLabel(e.due)}</small>
-                </td>
+                <td>{dateLabel(e.due)}</td>
               </>
             )}
-            <td className={"amount " + (incoming(e) ? "positive" : "")}>
+            <td className={"amount " + (incoming(e) ? "positive" : "negative")}>
               {incoming(e) ? "+" : "−"} {money(entryAmount(e, effectiveScope))}
               {!compact && <small>{money(remaining(s!, e))} pendentes</small>}
             </td>
@@ -596,78 +651,95 @@ export default function Workspace({
                       : "pending")
                 }
               >
-                {status(s!, e)}
+                {status(s!, e) === "Efetivado"
+                  ? incoming(e)
+                    ? "Recebido"
+                    : "Pago"
+                  : status(s!, e) === "Parcial"
+                    ? "Parte pendente"
+                    : status(s!, e) === "Vencido"
+                      ? "Em atraso"
+                      : status(s!, e)}
               </span>
             </td>
             <td>
               <div className="row-actions">
                 {!e.cancelled && remaining(s!, e) > 0 && (
-                  <Button variant="outline" size="sm" onClick={() => pay(e)}>
-                    Baixar
-                  </Button>
-                )}
-                {!compact && !e.recognized && !e.cancelled && (
                   <Button
-                    variant="ghost"
+                    className={incoming(e) ? "settle-income" : "settle-expense"}
                     size="sm"
-                    onClick={() => run(() => mutate("recognize", { id: e.id }))}
+                    onClick={() => pay(e)}
                   >
-                    Reconhecer
+                    {incoming(e) ? "Marcar como recebido" : "Marcar como pago"}
                   </Button>
                 )}
-                {!compact && !e.cancelled && paid(s!, e.id) === 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      open(
-                        "Cancelar pendência",
-                        [],
-                        () => mutate("cancel", { id: e.id }),
-                        `Confirmar cancelamento de ${e.title}?`,
-                      )
-                    }
-                  >
-                    Cancelar
-                  </Button>
-                )}
-                {!compact && paid(s!, e.id) > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      open(
-                        "Histórico e estorno",
-                        [
-                          select(
-                            "id",
-                            "Baixa",
-                            s!.payments
-                              .filter(
-                                (p) =>
-                                  p.entryId === e.id &&
-                                  !p.reversalOf &&
-                                  !s!.payments.some(
-                                    (r) => r.reversalOf === p.id,
+                <details className="row-more">
+                  <summary>Mais opções</summary>
+                  {!compact && !e.recognized && !e.cancelled && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        run(() => mutate("recognize", { id: e.id }))
+                      }
+                    >
+                      Reconhecer
+                    </Button>
+                  )}
+                  {!compact && !e.cancelled && paid(s!, e.id) === 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        open(
+                          "Cancelar pendência",
+                          [],
+                          () => mutate("cancel", { id: e.id }),
+                          `Confirmar cancelamento de ${e.title}?`,
+                        )
+                      }
+                    >
+                      Cancelar
+                    </Button>
+                  )}
+                  {!compact && paid(s!, e.id) > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        open(
+                          "Histórico e estorno",
+                          [
+                            select(
+                              "id",
+                              "Baixa",
+                              s!.payments
+                                .filter(
+                                  (p) =>
+                                    p.entryId === e.id &&
+                                    !p.reversalOf &&
+                                    !s!.payments.some(
+                                      (r) => r.reversalOf === p.id,
+                                    ),
+                                )
+                                .map((p) =>
+                                  option(
+                                    p.id,
+                                    `${dateLabel(p.date)} · ${money(p.amount)}`,
                                   ),
-                              )
-                              .map((p) =>
-                                option(
-                                  p.id,
-                                  `${dateLabel(p.date)} · ${money(p.amount)}`,
                                 ),
-                              ),
-                          ),
-                          dateField(),
-                        ],
-                        (d) => mutate("reverse", d),
-                        "Estorna uma baixa inteira, preservando a origem e o histórico pessoal.",
-                      )
-                    }
-                  >
-                    Estornar
-                  </Button>
-                )}
+                            ),
+                            dateField(),
+                          ],
+                          (d) => mutate("reverse", d),
+                          "Estorna uma baixa inteira, preservando a origem e o histórico pessoal.",
+                        )
+                      }
+                    >
+                      Desfazer pagamento / recebimento
+                    </Button>
+                  )}
+                </details>
               </div>
             </td>
           </tr>
@@ -1009,7 +1081,17 @@ export default function Workspace({
                   </span>
                   <span>
                     <b>{money(remaining(s!, e))}</b>
-                    <small className="amber">{status(s!, e)}</small>
+                    <small className="amber">
+                      {status(s!, e) === "Efetivado"
+                        ? incoming(e)
+                          ? "Recebido"
+                          : "Pago"
+                        : status(s!, e) === "Parcial"
+                          ? "Parte pendente"
+                          : status(s!, e) === "Vencido"
+                            ? "Em atraso"
+                            : status(s!, e)}
+                    </small>
                   </span>
                   <ChevronRight size={16} />
                 </button>
@@ -1105,7 +1187,7 @@ export default function Workspace({
     return (
       <Section
         title="Todos os lançamentos"
-        sub={`${list.length} registros · competência e caixa separados`}
+        sub={`${list.length} registros · acompanhe o que entrou, saiu e ainda está pendente`}
         action={
           <Button onClick={() => newEntry()}>
             <Plus size={16} />
@@ -1113,6 +1195,26 @@ export default function Workspace({
           </Button>
         }
       >
+        <div className="entry-tabs">
+          <button
+            className={!kind ? "selected" : ""}
+            onClick={() => setKind("")}
+          >
+            Todos
+          </button>
+          <button
+            className={kind === "receita" ? "income selected" : "income"}
+            onClick={() => setKind("receita")}
+          >
+            ↓ Recebimentos
+          </button>
+          <button
+            className={kind === "despesa" ? "expense selected" : "expense"}
+            onClick={() => setKind("despesa")}
+          >
+            ↑ Despesas
+          </button>
+        </div>
         <div className="table-filters">
           <label className="search">
             <Search size={16} />
@@ -1249,61 +1351,66 @@ export default function Workspace({
             Transferir entre contas
           </Button>
         </div>
-        <Section
-          title="Conciliação manual"
-          sub="Confira cada baixa com o extrato. Estornos preservam o vínculo original."
-        >
-          <Table
-            heads={["Data", "Lançamento", "Conta", "Valor", "Conciliação"]}
+        <details className="optional-reconciliation">
+          <summary>Conferir pagamentos com o extrato (opcional)</summary>
+          <Section
+            title="Conferência do extrato"
+            sub="Confira cada baixa com o extrato. Estornos preservam o vínculo original."
           >
-            {s!.payments
-              .filter(
-                (p) =>
-                  !company ||
-                  s!.accounts.find((a) => a.id === p.accountId)?.companyId ===
-                    company,
-              )
-              .map((p) => (
-                <tr key={p.id}>
-                  <td>{dateLabel(p.date)}</td>
-                  <td>
-                    {s!.entries.find((e) => e.id === p.entryId)?.title}
-                    <small>
-                      {p.reversalOf
-                        ? "Estorno vinculado a " + p.reversalOf
-                        : "Baixa " + p.id.slice(0, 8)}
-                    </small>
-                  </td>
-                  <td>{s!.accounts.find((a) => a.id === p.accountId)?.name}</td>
-                  <td
-                    className={
-                      paymentAmount(s!, p) >= 0 ? "positive" : "negative"
-                    }
-                  >
-                    {money(paymentAmount(s!, p))}
-                  </td>
-                  <td>
-                    <Button
-                      variant={p.reconciled ? "ghost" : "outline"}
-                      size="sm"
-                      onClick={() =>
-                        run(() => mutate("reconcile", { id: p.id }))
+            <Table
+              heads={["Data", "Lançamento", "Conta", "Valor", "Conciliação"]}
+            >
+              {s!.payments
+                .filter(
+                  (p) =>
+                    !company ||
+                    s!.accounts.find((a) => a.id === p.accountId)?.companyId ===
+                      company,
+                )
+                .map((p) => (
+                  <tr key={p.id}>
+                    <td>{dateLabel(p.date)}</td>
+                    <td>
+                      {s!.entries.find((e) => e.id === p.entryId)?.title}
+                      <small>
+                        {p.reversalOf
+                          ? "Estorno vinculado a " + p.reversalOf
+                          : "Baixa " + p.id.slice(0, 8)}
+                      </small>
+                    </td>
+                    <td>
+                      {s!.accounts.find((a) => a.id === p.accountId)?.name}
+                    </td>
+                    <td
+                      className={
+                        paymentAmount(s!, p) >= 0 ? "positive" : "negative"
                       }
                     >
-                      {p.reconciled ? (
-                        <>
-                          <Check size={14} />
-                          Conciliado
-                        </>
-                      ) : (
-                        "Conferir baixa"
-                      )}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-          </Table>
-        </Section>
+                      {money(paymentAmount(s!, p))}
+                    </td>
+                    <td>
+                      <Button
+                        variant={p.reconciled ? "ghost" : "outline"}
+                        size="sm"
+                        onClick={() =>
+                          run(() => mutate("reconcile", { id: p.id }))
+                        }
+                      >
+                        {p.reconciled ? (
+                          <>
+                            <Check size={14} />
+                            Conciliado
+                          </>
+                        ) : (
+                          "Conferir baixa"
+                        )}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+            </Table>
+          </Section>
+        </details>
         <Section
           title="Transferências vinculadas"
           sub="As duas pontas preservam o impacto de cada CNPJ, sem inflar entradas e saídas do grupo."
@@ -1855,7 +1962,15 @@ export default function Workspace({
                               {money(paid(s!, e.id))} pagos
                               <small>
                                 {money(remaining(s!, e))} pendentes ·{" "}
-                                {status(s!, e)}
+                                {status(s!, e) === "Efetivado"
+                                  ? incoming(e)
+                                    ? "Recebido"
+                                    : "Pago"
+                                  : status(s!, e) === "Parcial"
+                                    ? "Parte pendente"
+                                    : status(s!, e) === "Vencido"
+                                      ? "Em atraso"
+                                      : status(s!, e)}
                               </small>
                             </div>
                           ))}

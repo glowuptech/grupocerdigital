@@ -2528,5 +2528,163 @@ nav a.active {
     padding-top: 18px;
   }
 }
-.panel-heading h2{font-size:17px;color:#102b3c;letter-spacing:-.2px}.chart{height:280px}.chart-axis{font-size:11px;min-width:87px}.month-bars>small,.legend span{font-size:12px}.legend{gap:24px}.chart-grid{background:repeating-linear-gradient(to top,transparent 0,transparent calc(25% - 1px),#d5dfe9 calc(25% - 1px),#d5dfe9 25%)}
-@media(max-width:700px){.chart{height:245px}.chart-axis{min-width:68px;font-size:9px}.month-bars>small,.legend span{font-size:10px}.panel-heading h2{font-size:15px}}
+.panel-heading h2 {
+  font-size: 17px;
+  color: #102b3c;
+  letter-spacing: -0.2px;
+}
+.chart {
+  height: 280px;
+}
+.chart-axis {
+  font-size: 11px;
+  min-width: 87px;
+}
+.month-bars > small,
+.legend span {
+  font-size: 12px;
+}
+.legend {
+  gap: 24px;
+}
+.chart-grid {
+  background: repeating-linear-gradient(
+    to top,
+    transparent 0,
+    transparent calc(25% - 1px),
+    #d5dfe9 calc(25% - 1px),
+    #d5dfe9 25%
+  );
+}
+@media (max-width: 700px) {
+  .chart {
+    height: 245px;
+  }
+  .chart-axis {
+    min-width: 68px;
+    font-size: 9px;
+  }
+  .month-bars > small,
+  .legend span {
+    font-size: 10px;
+  }
+  .panel-heading h2 {
+    font-size: 15px;
+  }
+}
+.form-grid label[hidden] {
+  display: none;
+}
+.advanced-form {
+  margin: 0 24px 20px;
+  border: 1px solid #cbd8e5;
+  border-radius: 8px;
+  background: #f5f8fb;
+}
+.advanced-form > summary {
+  padding: 14px;
+  color: #29485f;
+  font-size: 13px;
+  font-weight: 700;
+}
+.advanced-form .form-grid {
+  padding-top: 5px;
+}
+.entry-type {
+  display: block;
+  width: fit-content;
+  border-radius: 5px;
+  padding: 3px 7px;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.entry-type.income,
+.transaction-icon.income {
+  background: #007d4d;
+  color: white;
+}
+.entry-type.expense,
+.transaction-icon.expense {
+  background: #c12d40;
+  color: white;
+}
+.entry-income {
+  background: #f0faf5;
+}
+.entry-expense {
+  background: #fff5f5;
+}
+.entry-income td:first-child {
+  border-left: 4px solid #008354;
+}
+.entry-expense td:first-child {
+  border-left: 4px solid #c23546;
+}
+.settle-income {
+  background: #007d4d !important;
+  color: white !important;
+}
+.settle-expense {
+  background: #c12d40 !important;
+  color: white !important;
+}
+.entry-tabs {
+  display: flex;
+  gap: 10px;
+  padding: 10px 23px 18px;
+  flex-wrap: wrap;
+}
+.entry-tabs button {
+  border: 1px solid #afbdcb;
+  border-radius: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  color: #29485f;
+}
+.entry-tabs .income {
+  color: #006d43;
+  border-color: #008354;
+}
+.entry-tabs .expense {
+  color: #b32339;
+  border-color: #c23546;
+}
+.entry-tabs .selected {
+  background: #183e58;
+  color: #fff;
+}
+.entry-tabs .income.selected {
+  background: #007d4d;
+  color: #fff;
+}
+.entry-tabs .expense.selected {
+  background: #c12d40;
+  color: #fff;
+}
+.optional-reconciliation {
+  padding: 15px;
+  margin-bottom: 22px;
+  border: 1px solid #cbd8e5;
+  border-radius: 10px;
+  background: #f2f6fa;
+}
+.optional-reconciliation > summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: #29485f;
+}
+.row-more > summary {
+  padding: 9px;
+  font-size: 11px;
+  color: #40576b;
+}
+.row-more[open] {
+  min-width: 150px;
+}
+.row-more[open] button {
+  display: block;
+  margin: 5px 0;
+}

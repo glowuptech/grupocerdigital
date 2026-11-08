@@ -58,3 +58,7 @@ Leia [o modelo e o plano de integração](docs/ETAPA-2.md) e [a matriz de aceite
 ### Acesso por proxy
 
 O login compara a origem com o endereço público encaminhado em `X-Forwarded-Host` e `X-Forwarded-Proto`. O proxy deve sobrescrever esses cabeçalhos. Opcionalmente, configure `APP_ORIGIN` com a origem pública exata (ex.: `https://financeiro.exemplo.com`) para fixar o endereço autorizado. Cookies usam `Secure` quando esse endereço usa HTTPS.
+
+### Lançamentos simplificados
+
+No cadastro diário, informe tipo, projeto, título, valor, categoria, vencimento e situação. “Já paguei / já recebi” registra o movimento e seu pagamento/recebimento na mesma transação; escolha a conta da empresa e a data real. Para recorrências, deixe pendente e confirme cada ocorrência individualmente. Competência, classificação DRE, vínculos e rateios ficam em “Mais opções”. Na lista, use Recebimentos (verde) e Despesas (vermelho), com “Marcar como recebido/pago” para confirmar valores inclusive parciais. A conferência de extrato é opcional na tela Contas.

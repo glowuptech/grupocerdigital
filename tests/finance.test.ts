@@ -380,3 +380,29 @@ test("adiantamento com devolução efetivada exige estornar a devolução antes 
     }),
   );
 });
+
+test("cadastro já pago registra lançamento e pagamento com a mesma competência", async () => {
+  const { command } = await import("../src/lib/commands");
+  const s = seed();
+  command(s, "rafael", "entry", {
+    companyId: "c1",
+    projectId: "p1",
+    kind: "despesa",
+    category: "Administrativo",
+    title: "Pago no cadastro",
+    description: "",
+    amount: 12000,
+    competence: current,
+    due: current,
+    recognized: true,
+    allocations: [],
+    dre: "operacional",
+    paymentState: "paid",
+    paidAccount: "a1",
+    paidDate: current,
+  });
+  const e = s.entries.at(-1)!;
+  assert.equal(paid(s, e.id), 12000);
+  assert.equal(remaining(s, e), 0);
+  assert.equal(s.payments.at(-1)!.entryId, e.id);
+});

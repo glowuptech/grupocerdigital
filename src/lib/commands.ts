@@ -23,13 +23,21 @@ export function command(
   const str = (key: string) => String(p[key] ?? "");
   const num = (key: string) => Number(p[key]);
   switch (type) {
-    case "entry":
+    case "entry": {
+      const id = uid();
+      if (p.paymentState === "paid" && p.end)
+        throw Error(
+          "Para repetir mensalmente, deixe o lançamento pendente e marque apenas a ocorrência já paga.",
+        );
       addEntry(
         s,
-        { ...p, id: uid(), cancelled: false } as unknown as Entry,
+        { ...p, id, cancelled: false } as unknown as Entry,
         str("end") || undefined,
       );
+      if (p.paymentState === "paid")
+        settle(s, id, num("amount"), str("paidAccount"), str("paidDate"));
       break;
+    }
     case "recognize": {
       const e = s.entries.find((e) => e.id === str("id"));
       if (!e || e.cancelled) throw Error("Lançamento inválido.");
